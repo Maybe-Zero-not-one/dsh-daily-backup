@@ -315,6 +315,165 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------- 离线备份
+
+    /**
+     * 「离线备份」这一栏：装一个本地脚本，双击就能拿到 Cookies。
+     *
+     * 为什么必须有这么一块：`Network\Cookies` 在 DSH 运行时被 Chromium 独占锁死
+     * （2026-11-23 实测，copyFile / .NET Share.ReadWrite 全 EBUSY，非管理员无解），
+     * 而 `process.on('exit')` 那个钩子在 13 天里只成过 1 次 —— Electron 退出时
+     * 常常直接把进程收掉，JS 来不及跑。
+     *
+     * 所以给出路：装个脚本 → 它关 DSH → 抄（这时候一定抄得到）→ 再把 DSH 开回来。
+     * 用户只双击一下，不用记命令行。
+     */
+    function 离线备份({ 状态 }) {
+      const [现况, set现况] = React.useState(状态 || null)
+      const [忙, set忙] = React.useState(null) // 'install' | 'open'
+      const [结果, set结果] = React.useState(null)
+
+      React.useEffect(() => {
+        if (状态) set现况(状态)
+      }, [状态])
+
+      const 重读 = async () => {
+        try {
+          const r = await fetch(API + '/offline', { cache: 'no-store', credentials: 'same-origin' })
+          const j = await r.json().catch(() => null)
+          if (r.ok && j && j.ok !== false) set现况(j)
+        } catch {
+          // 读不到就保持原样，别把已有状态擦掉
+        }
+      }
+
+      const 装 = async () => {
+        set忙('install')
+        set结果(null)
+        try {
+          const r = await fetch(API + '/offline-install', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          set结果({ kind: 'ok', text: '已装到 ' + j.目录 + '（双击 双击我-离线备份.cmd 就能用）' })
+          await 重读()
+        } catch (失败) {
+          const 话 = String((失败 && 失败.message) || 失败)
+          set结果({ kind: 'bad', text: '装失败：' + 话 })
+          报告给宿主('装离线备份脚本失败：' + 话)
+        } finally {
+          set忙(null)
+        }
+      }
+
+      const 打开 = async () => {
+        set忙('open')
+        set结果(null)
+        try {
+          const r = await fetch(API + '/offline-open', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          set结果({ kind: 'ok', text: '已在资源管理器里选中' })
+        } catch (失败) {
+          set结果({ kind: 'bad', text: '打不开：' + String((失败 && 失败.message) || 失败) })
+        } finally {
+          set忙(null)
+        }
+      }
+
+      const 已装 = 现况 && 现况.已装 === true
+
+      return h(
+        'div',
+        null,
+        h(
+          'div',
+          { className: 'sb-callout', style: { marginBottom: '12px' } },
+          h('b', null, '为什么需要它'),
+          '：浏览器 cookie 库（',
+          h('code', null, 'Network\\Cookies'),
+          '）在 DSH 运行时是**独占锁**，插件抄不到 —— 这不是路径写错，是那个文件物理上读不了。' +
+            '唯一稳的办法是「DSH 停下来的时候抄」。下面的脚本就是干这个的：双击一下，它关 DSH → 抄 → 再把 DSH 开回来。',
+        ),
+        h(
+          'div',
+          { className: 'sb-form' },
+          h(
+            'div',
+            { className: 'sb-form-head' },
+            h('div', { className: 'sb-form-title' }, '离线备份脚本'),
+            h(
+              'div',
+              { className: 'sb-form-sub' },
+              已装
+                ? '已装好。双击那个 .cmd 就行 —— 它会先问都不问地关掉 DSH，抄完再开回来。'
+                : '还没装。装一份之后，随时想要完整的 cookie 就双击它。',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-body' },
+            已装
+              ? h(
+                  'div',
+                  { className: 'sb-row' },
+                  h('label', { className: 'sb-row-label' }, '装在哪'),
+                  h(
+                    'div',
+                    { className: 'sb-row-ctl', style: { flexDirection: 'column', alignItems: 'stretch', gap: '4px' } },
+                    h('code', { style: { fontSize: '11.5px', wordBreak: 'break-all' } }, 现况.启动器 || 现况.目录),
+                    h('span', { className: 'sb-chip', 'data-ok': '1', style: { alignSelf: 'flex-start' } },
+                      '装于 ' + 格式化时刻(现况.时间)),
+                  ),
+                )
+              : null,
+            h(
+              'div',
+              { className: 'sb-callout' },
+              h('b', null, '它会做什么'),
+              h('br'),
+              '1. 结束 DSH（含子进程），等它真退干净（最多 45 秒，不行就强杀）',
+              h('br'),
+              '2. 备份索引 / 会话本体 / 应用状态（**这时 Cookies 一定抄得到**）/ 人设 / 记忆',
+              h('br'),
+              '3. 把 DSH 开回来（只有它原先在跑才会开）',
+              h('br'),
+              '4. 结果写进 plugin.log 和 backup.log，面板上能看到',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-foot' },
+            h(
+              'button',
+              { type: 'button', className: 'sb-btn sb-btn-primary', disabled: 忙 !== null, onClick: 装 },
+              忙 === 'install' ? '装着…' : 已装 ? '重新装一份' : '装到本机',
+            ),
+            已装
+              ? h(
+                  'button',
+                  { type: 'button', className: 'sb-btn', disabled: 忙 !== null, onClick: 打开 },
+                  忙 === 'open' ? '打开中…' : '在文件夹里看看',
+                )
+              : null,
+            h('span', { className: 'sb-form-hint' }, '装在备份根下的「离线备份」目录里'),
+          ),
+        ),
+        结果 ? h('div', { className: 'sb-notice', 'data-kind': 结果.kind }, 结果.text) : null,
+      )
+    }
+
     // ---------------------------------------------------------------- 网盘设置
 
     // 表单的初始值：从宿主给的「脱敏视图」来。令牌/密码永远是空输入框 ——
@@ -1285,7 +1444,27 @@ window.__ModuleLoader__.load({
           },
           '网盘推送',
         ),
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': 页签 === '离线',
+            'data-on': 页签 === '离线' ? '1' : '0',
+            className: 'sb-tab',
+            onClick: () => set页签('离线'),
+          },
+          '离线备份',
+          // 没装的时候挂个提示点：这是"cookie 一直备不上"的正解，得让人看见
+          data && data.离线脚本 && data.离线脚本.已装 !== true
+            ? h('span', { className: 'sb-tab-num', title: '还没装离线脚本（cookie 备不全）' }, '!')
+            : null,
+        ),
       )
+
+      // 「离线」页签：装本地脚本，双击就能拿到完整 cookie
+      const 离线页 =
+        页签 === '离线' ? h(离线备份, { 状态: data && data.离线脚本 }) : null
 
       // 「网盘」页签的内容：表单 + 上一次推送的结果
       const 网盘页 =
@@ -1300,7 +1479,8 @@ window.__ModuleLoader__.load({
                     '网盘推送现在是关的。打开总开关并保存后，下次备份成功才会自动推。',
                   )
                 : null,
-              h(网盘设置, { 设置: (网盘信息 && 网盘信息.设置) || null, 上次: 网盘信息 && 网盘信息.上次, 读 }),            )
+              h(网盘设置, { 设置: (网盘信息 && 网盘信息.设置) || null, 上次: 网盘信息 && 网盘信息.上次, 读 }),
+            )
           : null
 
 
@@ -1475,6 +1655,7 @@ window.__ModuleLoader__.load({
           顶部,
           页签栏,
           网盘页,
+          离线页,
           记录页,
         ),
       )

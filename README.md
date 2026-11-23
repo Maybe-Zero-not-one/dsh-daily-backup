@@ -17,6 +17,7 @@ dsh plugin add dsh-daily-backup
 
 | 插件 | DSH | 实测日期 |
 | --- | --- | --- |
+| 1.1.0 | 0.2.2-rc.1 | 2026-11-24（新增「离线备份」页签：装本地脚本，双击拿到完整 Cookies） |
 | 1.0.4 | 0.2.2-rc.1 | 2026-11-23（去掉指向不存在仓库的 homepage/repository） |
 | 1.0.3 | 0.2.2-rc.1 | 2026-11-23（README 补上 npm 安装段与网盘设置页签说明） |
 | 1.0.2 | 0.2.2-rc.1 | 2026-11-23（清掉源码/文档里残留的作者本机路径） |
@@ -301,6 +302,73 @@ Error: desktop welcome: Web authentication failed
 搬走的理由：备份插件管的是「把 DSH 的状态存下来」，
 而 QQ 收到的图片是**消息链路**上的东西，跟 reply-jitter 管的出站节奏是同一批对象。
 两处都配会打架，所以这里彻底不留配置项。
+
+## 离线备份：把 Cookies 也备上（1.1.0 起）
+
+### 为什么需要它
+
+`应用状态\Network\Cookies` 是 Chromium 的 SQLite cookie 库，**DSH 跑着的时候它是独占锁死的**：
+
+```
+Network\Cookies           ✘ 锁着 (49152 B)   ← copyFile / CopyFileEx / robocopy /
+Network\Cookies-journal   ✔ 能读 (0 B)          .NET FileStream 连 Share.ReadWrite 强开都失败
+Preferences / Local State / leveldb ✓ 能读       非管理员没有 SeBackupPrivilege，也没有 VSS
+```
+
+这不是路径写错，是那个文件在 DSH 运行期间**物理上读不了**。
+
+`process.on('exit')` 那个补抄钩子也救不了：13 天里只触发过 1 次，那次 cookie 还是 `EBUSY`。
+Electron 退出时常常直接把进程收掉，JS 钩子来不及跑。
+
+### 怎么办：装一个本地脚本
+
+面板第三个页签「离线备份」→ 点**装到本机**。它会生成：
+
+```
+<目标目录>\离线备份\
+├── 离线备份.mjs            自包含的备份脚本（不 import 插件包）
+└── 双击我-离线备份.cmd     双击就跑
+```
+
+双击那个 `.cmd`，脚本做三件事：
+
+1. **结束 DSH**（含子进程），等它真退干净（最多 45 秒，不行就强杀）
+2. **备份**索引 / 会话本体 / 应用状态（**这时 Cookies 一定抄得到**）/ 人设 / 记忆
+3. **把 DSH 开回来**（只有它原先在跑才会开）
+
+结果同时写进 `plugin.log` 和 `backup.log`，面板上能看到。
+
+### 为什么脚本是自包含的
+
+脚本里**内联**了抄文件的逻辑，不 `import` 插件包。理由很实在：插件升级、搬家、
+被卸载之后，桌面那个双击还得能用；靠 import 一条路径，迟早因为包挪位而断。
+
+### 它用的是哪个 node
+
+不是用户装的 node，是 **DSH 自带的**那份：
+
+```
+D:\…\AHa\resources\runtime\primary-runtime\dependencies\node\bin\node.exe
+```
+
+通过 `process.resourcesPath` 找（不管 DSH 装在 C 盘还是 D 盘都对），
+找不到才退回 `PATH` 里的 `node`。
+
+⚠ 不能用 `process.execPath` —— DSH 是 Electron，那个指向 `DeepSeek Harness.exe`，
+拿它跑 `.mjs` 会变成"又开一个 DSH"。
+
+### 另一条路：`backup-now.mjs`
+
+插件包里也有 `backup-now.mjs`，可以 `node backup-now.mjs` 直接跑。它跟面板
+「立即备份」走同一套逻辑，但**同样需要 DSH 关着**才拿得到 Cookies。
+
+配置从哪来（按优先级）：
+
+1. `--config <路径>`
+2. 同目录 `backup-config.json`
+3. 都没有 → 走插件默认值（不再崩；1.0.4 之前是硬读，发布版因此一点就 ENOENT）
+
+环境变量 `DSH_BACKUP_TARGET` 可以覆盖目标目录。
 
 ## 手动跑一轮
 
