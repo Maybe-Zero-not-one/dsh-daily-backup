@@ -1,0 +1,6 @@
+# DSH「会话每日备份」
+# 这一行把宿主半边挂进 loader；配置项在 profile 的 cordis.patch.yml 里按
+# `- id: session-backup` 覆盖（id 必须一致）。
+- insert:
+    - id: session-backup
+      name: 'dsh-daily-backup'
