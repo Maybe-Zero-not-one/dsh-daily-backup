@@ -571,7 +571,12 @@ window.__ModuleLoader__.load({
           })
           const j = await r.json().catch(() => null)
           if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
-          set结果({ kind: 'ok', text: '已在资源管理器里选中' })
+          set结果({
+            kind: 'ok',
+            text: j.选中 === false
+              ? '脚本文件没找到，已打开它所在的目录：' + j.打开
+              : '已在资源管理器里选中：' + (j.打开 || ''),
+          })
         } catch (失败) {
           set结果({ kind: 'bad', text: '打不开：' + String((失败 && 失败.message) || 失败) })
         } finally {
