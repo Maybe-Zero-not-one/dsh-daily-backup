@@ -17,6 +17,7 @@ dsh plugin add dsh-daily-backup
 
 | 插件 | DSH | 实测日期 |
 | --- | --- | --- |
+| 1.2.0 | 0.2.2-rc.1 | 2026-11-24（默认备份位置改到 `<DSH_HOME>\backups`，面板可改） |
 | 1.1.0 | 0.2.2-rc.1 | 2026-11-24（新增「离线备份」页签：装本地脚本，双击拿到完整 Cookies） |
 | 1.0.4 | 0.2.2-rc.1 | 2026-11-23（去掉指向不存在仓库的 homepage/repository） |
 | 1.0.3 | 0.2.2-rc.1 | 2026-11-23（README 补上 npm 安装段与网盘设置页签说明） |
@@ -56,7 +57,7 @@ QQ 那边的会话在 `<DSH_HOME>\storages\session_projcache\sessions\onebot-*.j
 | 人设 | profile 的 `cordis.patch.yml`（卡片、默认卡、会话映射） | `人设\<日期>\` |
 | 记忆 | `soul-md\memory`（每张卡一个 md）+ `fish-memory`（remember 工具） | `记忆\<日期>\<目录名>\` |
 
-默认根目录是 `%USERPROFILE%\dsh-session-backup`（**不在任何工作区里**，清工作区不会伤到它）；`目标目录` 留空就是这个，写了就按写的来。
+默认根目录是 **`<DSH_HOME>\backups`**（默认即 `~\.dsh\backups`，**不在任何工作区里**，清工作区不会伤到它）；`目标目录` 留空就是这个，写了就按写的来。面板「备份记录」页顶部的**备份位置**能直接改。
 
 ## 结构
 
@@ -168,7 +169,7 @@ Error: desktop welcome: Web authentication failed
 | `backup.log` | 每轮一行流水：备了几个文件、多大、成功还是有异常 | 「今天备了吗」「上一轮为什么跳过」 |
 | `plugin.log` | **原因**：加载了什么配置、接口挂上没有、请求被拒、网页那边报了什么错 | 「面板打不开」「接口 404」「白屏」 |
 
-两个都在 `<目标目录>` 下（`目标目录` 留空时是 `%USERPROFILE%\dsh-session-backup\`）。
+两个都在 `<目标目录>` 下（`目标目录` 留空时是 `<DSH_HOME>\backups\`（默认 `~\.dsh\backups`））。
 `plugin.log` 超过 2MB 自动滚成 `plugin.log.1`（只留一代 —— 诊断日志看最近的，
 不该在备份目录里长成几十兆）。
 
@@ -239,7 +240,7 @@ Error: desktop welcome: Web authentication failed
 | --- | --- | --- |
 | `enabled` | `true` | 关掉就整个不启用 |
 | `源目录` | `''` | 空 = `<DSH_HOME>/storages/session_projcache/sessions` |
-| `目标目录` | `''` | 备份根；留空 = `%USERPROFILE%\dsh-session-backup` |
+| `目标目录` | `''` | 备份根；留空 = `<DSH_HOME>\backups`（默认 `~\.dsh\backups`），面板可改 |
 | `索引子目录` / `会话子目录` | `索引` / `会话` | 根下面两个子目录名 |
 | `会话文件` | `['onebot-*.json']` | 索引匹配规则，支持 `*` `?` |
 | `每天几点` | `'04:30'` | 24 小时制本地时间，**要加引号** |
@@ -302,6 +303,52 @@ Error: desktop welcome: Web authentication failed
 搬走的理由：备份插件管的是「把 DSH 的状态存下来」，
 而 QQ 收到的图片是**消息链路**上的东西，跟 reply-jitter 管的出站节奏是同一批对象。
 两处都配会打架，所以这里彻底不留配置项。
+
+## 备份位置（1.2.0 起默认在 DSH 家里）
+
+**默认 `<DSH_HOME>\backups`**（`DSH_HOME` 没设就是 `~\.dsh`），即：
+
+```
+C:\Users\<你>\.dsh\backups\
+├── 索引\YYYY-MM-DD\
+├── 会话\<工作区>\YYYY-MM-DD\
+├── 应用状态\YYYY-MM-DD\
+├── 人设\YYYY-MM-DD\
+├── 记忆\YYYY-MM-DD\
+├── 离线备份\               ← 「离线备份」页签装的脚本
+├── backup.log  plugin.log
+└── 网盘推送状态.json
+```
+
+为什么放这儿：
+
+- **跟着 DSH 走**。`DSH_HOME` 设到别的盘（比如 `E:\dsdata`），备份自动跟着去 `E:\dsdata\backups`。
+- **不会污染主目录根**。1.0.x 用的是 `%USERPROFILE%\dsh-session-backup`，
+  会在 `C:\Users\<你>\` 下凭空多一个目录。
+- **卸载好找**。想清掉就删 `~\.dsh\backups` 一处，不会有残留散在别处。
+- **不在任何工作区里**，清工作区、搬家都不会伤到它。
+
+### 改位置
+
+面板「备份记录」页顶部的 **备份位置** 区块：
+
+| 字段 | 说明 |
+| --- | --- |
+| 目录 | 留空 = 用默认（`<DSH_HOME>\backups`）。填绝对路径就按填的来 |
+| 保留天数 | 1–3650，更早的日期目录整个删 |
+| 每天几点 | `HH:MM`，24 小时制本地时间 |
+| 启动延迟 | DSH 起来后等几秒补拍 |
+
+**换目录不会搬旧备份**（那是几 GB，静默搬会让人以为卡住）。保存后提示会告诉你
+新旧两个目录各在哪，旧的自己处理。
+
+三道保护：
+
+1. 保存前**真的 mkdir 一次** —— 建不出来当场报，不会写完配置才发现路径是坏的
+2. **不许指到源目录/本体目录里面** —— 那会变成自己抄自己，越抄越大（会被拒绝）
+3. 只改白名单那 4 个键，碰不到网盘配置和别的东西
+
+⚠ **填了绝对路径就不会跟着 `DSH_HOME` 走**了。想换机器/换盘还自动跟随，就把这栏留空。
 
 ## 离线备份：把 Cookies 也备上（1.1.0 起）
 

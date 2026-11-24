@@ -315,6 +315,193 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------- 备份位置
+
+    /**
+     * 「备份位置」表单：改目标目录 / 保留天数 / 每天几点 / 启动延迟。
+     *
+     * 为什么单独一块、不塞进「网盘推送」那张表：这两件事的风险不一样。
+     * 网盘配错了只是推不上去；**位置改错了，备份就散在别处找不着了**。
+     * 所以这里把「当前在哪、是不是默认、改完旧的还在不在」都摊开说清楚。
+     */
+    function 位置设置({ 设置, 读 }) {
+      const [表单, set表单] = React.useState({
+        目标目录: (设置 && 设置.目标目录) || '',
+        保留天数: (设置 && 设置.保留天数) || 14,
+        每天几点: (设置 && 设置.每天几点) || '04:30',
+        启动延迟秒: (设置 && 设置.启动延迟秒) || 60,
+      })
+      const [脏, set脏] = React.useState(false)
+      const [保存中, set保存中] = React.useState(false)
+      const [结果, set结果] = React.useState(null)
+
+      React.useEffect(() => {
+        if (脏 || !设置) return
+        set表单({
+          目标目录: 设置.目标目录 || '',
+          保留天数: 设置.保留天数 || 14,
+          每天几点: 设置.每天几点 || '04:30',
+          启动延迟秒: 设置.启动延迟秒 || 60,
+        })
+      }, [设置, 脏])
+
+      const 改 = (键, 值) => {
+        set表单((旧) => ({ ...旧, [键]: 值 }))
+        set脏(true)
+        set结果(null)
+      }
+
+      const 保存 = async () => {
+        set保存中(true)
+        set结果(null)
+        try {
+          const r = await fetch(API + '/where-save', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(表单),
+          })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          const 换了 = j.旧目录 !== j.新目录
+          set结果({
+            kind: 'ok',
+            text:
+              (j.改了 && j.改了.length ? '已保存：' + j.改了.join('、') : '没有改动') +
+              (换了 ? '　新备份会写到 ' + j.新目录 + '；旧的那份还在 ' + j.旧目录 + '，没搬也没删' : ''),
+          })
+          set脏(false)
+          await 读()
+        } catch (失败) {
+          set结果({ kind: 'bad', text: '保存失败：' + String((失败 && 失败.message) || 失败) })
+        } finally {
+          set保存中(false)
+        }
+      }
+
+      const 行 = (标签, 说明, 控件) =>
+        h(
+          'div',
+          { className: 'sb-row' },
+          h('label', { className: 'sb-row-label' }, 标签, 说明 ? h('small', null, 说明) : null),
+          h('div', { className: 'sb-row-ctl' }, 控件),
+        )
+
+      return h(
+        'div',
+        { className: 'sb-form' },
+        h(
+          'div',
+          { className: 'sb-form-head' },
+          h('div', { className: 'sb-form-title' }, '备份位置'),
+          h(
+            'div',
+            { className: 'sb-form-sub' },
+            '留空就用默认位置（DSH 自己的家目录下的 backups，卸载/换机器都好找）。' +
+              '填了绝对路径就按你填的来 —— 注意填了就**不会**跟着 DSH_HOME 走。',
+          ),
+        ),
+        h(
+          'div',
+          { className: 'sb-form-body' },
+          行(
+            '目录',
+            (设置 && 设置.目标目录来源 === '默认' ? '现在是默认位置' : '现在是自己指定的') +
+              '；留空 = ' + ((设置 && 设置.默认目录) || ''),
+            h('input', {
+              className: 'sb-input',
+              type: 'text',
+              value: 表单.目标目录,
+              placeholder: (设置 && 设置.默认目录) || '留空用默认位置',
+              onChange: (事件) => 改('目标目录', 事件.target.value),
+            }),
+          ),
+          行(
+            '保留天数',
+            '更早的日期目录会被整个删掉',
+            h(
+              'div',
+              { className: 'sb-row-ctl', style: { flexWrap: 'nowrap' } },
+              h('input', {
+                className: 'sb-input sb-input-narrow',
+                type: 'number',
+                min: 1,
+                max: 3650,
+                value: 表单.保留天数,
+                onChange: (事件) => 改('保留天数', 事件.target.value),
+              }),
+              h('span', { className: 'sb-chip' }, '天'),
+            ),
+          ),
+          行(
+            '每天几点',
+            '24 小时制，本地时间',
+            h(
+              'div',
+              { className: 'sb-row-ctl', style: { flexWrap: 'nowrap' } },
+              h('input', {
+                className: 'sb-input sb-input-narrow',
+                type: 'text',
+                value: 表单.每天几点,
+                placeholder: '04:30',
+                onChange: (事件) => 改('每天几点', 事件.target.value),
+              }),
+            ),
+          ),
+          行(
+            '启动延迟',
+            'DSH 起来后等多久再补拍（秒）',
+            h(
+              'div',
+              { className: 'sb-row-ctl', style: { flexWrap: 'nowrap' } },
+              h('input', {
+                className: 'sb-input sb-input-narrow',
+                type: 'number',
+                min: 0,
+                max: 600,
+                value: 表单.启动延迟秒,
+                onChange: (事件) => 改('启动延迟秒', 事件.target.value),
+              }),
+              h('span', { className: 'sb-chip' }, '秒'),
+            ),
+          ),
+        ),
+        h(
+          'div',
+          { className: 'sb-form-foot' },
+          h(
+            'button',
+            { type: 'button', className: 'sb-btn sb-btn-primary', disabled: 保存中, onClick: 保存 },
+            保存中 ? '保存中…' : '保存设置',
+          ),
+          脏
+            ? h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'sb-btn',
+                  disabled: 保存中,
+                  onClick: () => {
+                    set表单({
+                      目标目录: (设置 && 设置.目标目录) || '',
+                      保留天数: (设置 && 设置.保留天数) || 14,
+                      每天几点: (设置 && 设置.每天几点) || '04:30',
+                      启动延迟秒: (设置 && 设置.启动延迟秒) || 60,
+                    })
+                    set脏(false)
+                    set结果(null)
+                  },
+                },
+                '撤销改动',
+              )
+            : null,
+          h('span', { className: 'sb-form-hint' }, 脏 ? '有未保存的改动' : '与已存配置一致'),
+        ),
+        结果 ? h('div', { className: 'sb-notice', 'data-kind': 结果.kind, style: { margin: '12px 16px 16px' } }, 结果.text) : null,
+      )
+    }
+
     // ---------------------------------------------------------------- 离线备份
 
     /**
@@ -958,6 +1145,8 @@ window.__ModuleLoader__.load({
       const [诊断行, set诊断行] = React.useState([])
       // '记录' 看备份了哪些文件；'网盘' 配推送。分开是因为一个是「看」一个是「改」
       const [页签, set页签] = React.useState('记录')
+      // 「备份位置」表单要的那几个值（跟列表分开读，改位置时不用等整份列表刷完）
+      const [位置设置数据, set位置设置数据] = React.useState(null)
 
       // 同一个读取错误只报一次：60 秒轮询一轮，报满整本日志就没人看得下去了
       const 报过的错 = React.useRef('')
@@ -985,6 +1174,14 @@ window.__ModuleLoader__.load({
             报过的错.current = 话
             报告给宿主('面板读不到 /session-backup/list：' + 话)
           }
+        }
+        // 位置表单单独一路：它读失败不该把整个面板标成"读不到备份情况"
+        try {
+          const r2 = await fetch(API + '/where', { cache: 'no-store', credentials: 'same-origin' })
+          const j2 = await r2.json().catch(() => null)
+          if (r2.ok && j2 && j2.ok !== false) set位置设置数据(j2.设置)
+        } catch {
+          // 读不到就保持上一次的值，别把用户正在编辑的表单清空
         }
       }, [])
 
@@ -1289,8 +1486,9 @@ window.__ModuleLoader__.load({
           h(
             'p',
             { className: 'sb-sub' },
-            '每天把会话本体、索引、应用状态、人设、记忆各留一份到工作区外。',
+            '每天把会话本体、索引、应用状态、人设、记忆各留一份。',
             配置.目标目录 ? h('code', null, 配置.目标目录) : null,
+            配置.目标目录是默认值 ? h('span', { className: 'sb-chip', style: { marginLeft: '6px' } }, '默认位置') : null,
             '　每天 ' + (配置.每天几点 || '—') + ' 拍一版，保留最近 ' + (配置.保留天数 || '—') + ' 天。',
           ),
         ),
@@ -1627,6 +1825,8 @@ window.__ModuleLoader__.load({
               有数据 ? '（下面这份是上次读到的）' : '',
             )
           : null,
+        // 位置设置放在记录页顶部：这是"备份存哪儿"的事，跟列表是同一件事的两面
+        h(位置设置, { 设置: 位置设置数据, 读 }),
         工具栏,
         日期们.map((日) => 画一天(日)),
         读取中,
