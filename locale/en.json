@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Session backup",
-    "description": "Copy sessions, personas, memory, and app state to a folder outside every workspace once a day, keep the last N days, browse and delete a day from the Backup panel in the left sidebar, and push each day's copy to your own OpenList or WebDAV storage. The Backup panel lists every file per day, and its second tab edits the netdisk settings without hand-editing the profile. Everything stays on your machine or your own storage."
+    "description": "Copy sessions, personas, memory, and app state to a folder outside every workspace once a day, keep the last N days, browse and delete a day from the Backup panel in the left sidebar, and push each day's copy to your own OpenList or WebDAV storage. The Backup panel lists every file per day, and its second tab edits the netdisk settings without hand-editing the profile. Persona cards come from dsh-soul-md; memory comes from dsh-soul-md (per persona card) and dsh-fish-memory (per session) — this plugin only copies them, it does not create that data. Everything stays on your machine or your own storage."
   }
 }
