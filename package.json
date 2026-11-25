@@ -1,6 +1,6 @@
 {
   "name": "dsh-daily-backup",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "每天把会话本体、索引、人设、记忆、应用状态各备份一份到工作区外，保留最近 N 天；左侧栏「备份」里能看备份了哪些文件、管理（手动备份 / 删除某天），第二个页签可直接配网盘推送（OpenList / WebDAV）。",
   "keywords": [
     "dsh",
@@ -13,7 +13,7 @@
     "openlist"
   ],
   "license": "MIT",
-  "author": "TheGoast",
+  "author": "Maybe-Zero-not-one <2731331762@qq.com>",
   "type": "module",
   "engines": {
     "node": ">=22",
@@ -52,5 +52,13 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maybe-Zero-not-one/dsh-daily-backup.git"
+  },
+  "homepage": "https://github.com/Maybe-Zero-not-one/dsh-daily-backup",
+  "bugs": {
+    "url": "https://github.com/Maybe-Zero-not-one/dsh-daily-backup/issues"
   }
 }
