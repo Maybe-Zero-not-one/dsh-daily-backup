@@ -17,6 +17,10 @@ dsh plugin add dsh-daily-backup
 
 | 插件 | DSH | 实测日期 |
 | --- | --- | --- |
+| 1.2.6 | 0.2.2-rc.1 | 2026-11-25（README 去掉「跑一个插件并不附带的修复脚本」的说法） |
+| 1.2.5 | 0.2.2-rc.1 | 2026-11-25（README 去掉作者机器专属信息：快捷方式名、崩溃时间戳、账号） |
+| 1.2.4 | 0.2.2-rc.1 | 2026-11-25（描述与作者字段整理，去掉个人邮箱） |
+| 1.2.3 | 0.2.2-rc.1 | 2026-11-25（补 repository / homepage / bugs，README 标题改回 dsh-daily-backup） |
 | 1.2.1 | 0.2.2-rc.1 | 2026-11-24（修「是默认位置」判断：归一化后永远 false） |
 | 1.2.0 | 0.2.2-rc.1 | 2026-11-24（默认备份位置改到 `<DSH_HOME>\backups`，面板可改） |
 | 1.1.0 | 0.2.2-rc.1 | 2026-11-24（新增「离线备份」页签：装本地脚本，双击拿到完整 Cookies） |
@@ -129,7 +133,7 @@ Error: desktop welcome: Web authentication failed
 
 ## 左侧栏「备份」面板（0.2.0 起）
 
-左侧栏在「插件」「自动化任务」「MCP」那一组里多一个图标，点开是主区一整页，**两个页签**：
+左侧栏在「插件」「自动化任务」「MCP」那一组里多一个图标，点开是主区一整页，**三个页签**（备份记录 / 网盘推送 / 离线备份）：
 
 **页签一 · 备份记录**（看）
 
@@ -192,7 +196,7 @@ Error: desktop welcome: Web authentication failed
 
 ## 网页接口（面板用的，也可以自己 curl）
 
-宿主半边在 `webServer` 上挂了五个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
+宿主半边在 `webServer` 上挂了十四个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
 
 | 方法 | 路径 | 干什么 |
 | --- | --- | --- |
@@ -205,6 +209,11 @@ Error: desktop welcome: Web authentication failed
 | POST | `/session-backup/netdisk-test` | 试连（只列目录，不上传）；回 `{ok,成功,话}` |
 | GET | `/session-backup/log?lines=100&which=backup` | `backup.log` 或 `plugin.log`（`which=plugin`）最后 N 行（1..500） |
 | POST | `/session-backup/log-client` | 网页半边报错专用：体 `{message, detail}` → 写进 `plugin.log` |
+| GET | `/session-backup/offline` | 离线备份脚本状态：装没装、脚本与 cmd 的路径 |
+| POST | `/session-backup/offline-install` | 把自包含的备份脚本写到 `<目标目录>\离线备份\`，回 `{ok,脚本,cmd}` |
+| POST | `/session-backup/offline-open` | 在资源管理器里打开脚本所在目录（没装则 400） |
+| GET | `/session-backup/where` | 备份位置：当前目录、默认目录、来源（默认 / 自定义）、`DSH_HOME` |
+| POST | `/session-backup/where-save` | 存备份位置，走 `configEditor`；回 `{ok,改了:[...]}` |
 
 所有 POST 会先问 `connection.requestRejection`：不是这个浏览器会话发来的就 401/403，
 所以别处（包括别的网页）不能靠它们删备份、改配置、往日志里灌字。`delete` 的日期**自己再校验一遍**
@@ -250,7 +259,6 @@ Error: desktop welcome: Web authentication failed
 | `备份应用状态` / `应用状态目录` / `应用状态项` | `true` / `''` / 见源码 | 网页端 Cookies 等 |
 | `备份人设` / `人设配置` | `true` / `''` | 空 = `<DSH_HOME>/profiles/desktop/cordis.patch.yml` |
 | `备份记忆` / `记忆目录` | `true` / `[]` | 空 = `[soul-md/memory, fish-memory]` |
-| ~~`归置收到的图` / `媒体目录` / `归置最小年龄分钟`~~ | — | **已搬到 `dsh-reply-jitter`**（2026-11-13） |
 | `推送网盘` | `false` | 备份成功后把当天备份推到网盘（面板「网盘推送」页签可改） |
 | `网盘协议` | `openlist` | `openlist`（本机 OpenList HTTP API）或 `webdav`（PUT/MKCOL） |
 | `网盘地址` | `http://127.0.0.1:5244` | OpenList 地址（webdav 协议时填 WebDAV 端点） |
@@ -294,15 +302,6 @@ Error: desktop welcome: Web authentication failed
 
 ⚠ **想连「关闭 DSH 后手动备份」一起推**（那是 Cookies 唯一能备全的时候）：
 把 `backup-config.json` 里也配上同样的网盘配置，再 `node backup-now.mjs`。
-
-## 归置收到的图 —— 已搬走（2026-11-13）
-
-这块功能**不再属于备份插件**，挪到 `dsh-reply-jitter` 了
-（那边的 `归置收到的图` / `媒体目录` / `归置最小年龄分钟` / `归置扫描秒`）。
-
-搬走的理由：备份插件管的是「把 DSH 的状态存下来」，
-而 QQ 收到的图片是**消息链路**上的东西，跟 reply-jitter 管的出站节奏是同一批对象。
-两处都配会打架，所以这里彻底不留配置项。
 
 ## 备份位置（1.2.0 起默认在 DSH 家里）
 
