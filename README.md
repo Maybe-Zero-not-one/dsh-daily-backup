@@ -5,7 +5,7 @@ DSH 插件：**每天把会话、人设、记忆、应用状态各留一份到�
 页面里第二个页签可以直接**配网盘推送**（OpenList / WebDAV），每天备份完自动推一份异地保险。
 
 npm 上的包名是 **`dsh-daily-backup`**（`dsh-session-backup` 这个名字 2026-10 已被别人占用，
-功能不是一回事；`@thegoast/...` 那个 scope 这个账号也发不了）。装：
+功能不是一回事）。装：
 
 ```powershell
 dsh plugin add dsh-daily-backup
@@ -17,13 +17,17 @@ dsh plugin add dsh-daily-backup
 
 | 插件 | DSH | 实测日期 |
 | --- | --- | --- |
+| 1.2.6 | 0.2.2-rc.1 | 2026-11-25（README 去掉「跑一个插件并不附带的修复脚本」的说法） |
+| 1.2.5 | 0.2.2-rc.1 | 2026-11-25（README 去掉作者机器专属信息：快捷方式名、崩溃时间戳、账号） |
+| 1.2.4 | 0.2.2-rc.1 | 2026-11-25（描述与作者字段整理，去掉个人邮箱） |
+| 1.2.3 | 0.2.2-rc.1 | 2026-11-25（补 repository / homepage / bugs，README 标题改回 dsh-daily-backup） |
 | 1.2.1 | 0.2.2-rc.1 | 2026-11-24（修「是默认位置」判断：归一化后永远 false） |
 | 1.2.0 | 0.2.2-rc.1 | 2026-11-24（默认备份位置改到 `<DSH_HOME>\backups`，面板可改） |
 | 1.1.0 | 0.2.2-rc.1 | 2026-11-24（新增「离线备份」页签：装本地脚本，双击拿到完整 Cookies） |
 | 1.0.4 | 0.2.2-rc.1 | 2026-11-23（去掉指向不存在仓库的 homepage/repository） |
 | 1.0.3 | 0.2.2-rc.1 | 2026-11-23（README 补上 npm 安装段与网盘设置页签说明） |
-| 1.0.2 | 0.2.2-rc.1 | 2026-11-23（清掉源码/文档里残留的作者本机路径） |
-| 1.0.1 | 0.2.2-rc.1 | 2026-11-23（默认目录改成不依赖作者机器） |
+| 1.0.2 | 0.2.2-rc.1 | 2026-11-23（清掉源码/文档里写死的绝对路径示例） |
+| 1.0.1 | 0.2.2-rc.1 | 2026-11-23（默认目录不再依赖某台具体机器） |
 | 1.0.0 | 0.2.2-rc.1 | 2026-11-23（首个公开发布：加了网盘设置页签） |
 | 0.2.3 | 0.2.2-rc.1 | 2026-11-11 |
 | 0.2.2 | 0.2.2-rc.1 | 2026-11-11 |
@@ -74,9 +78,9 @@ QQ 那边的会话在 `<DSH_HOME>\storages\session_projcache\sessions\onebot-*.j
 1. **换插件名/换作者就找不到。** 本插件认的是**目录名**（`<DSH_HOME>\soul-md\memory` 和
    `<DSH_HOME>\fish-memory`），不是 npm 包名。换了别的记忆插件、或者把它配到别的目录，
    得用 `记忆目录` 配置项指过去，否则那一路会静默跳过。
-2. **"记忆"是两套东西，别混。** `soul-md\memory` 是**按人设卡**存的（谁在说话就写谁的卡），
+2. **「记忆」是两套东西，别混。** `soul-md\memory` 是**按人设卡**存的（谁在说话就写谁的卡），
    `fish-memory` 是**按会话**存的（这个会话记住了什么）。两套互不覆盖，所以两个目录都备。
-3. **人设是"配置"不是"文件"。** 它没有独立的数据文件，就活在 `cordis.patch.yml` 里面。
+3. **人设是「配置」不是「文件」。** 它没有独立的数据文件，就活在 `cordis.patch.yml` 里面。
    所以 `人设\<日期>\cordis.patch.yml` 这个备份**顺带也含了整份 profile 配置**
    （网盘账号、API key、QQ token 等）—— 落盘前会脱敏（见下），但仍建议把备份目录当敏感数据对待。
 
@@ -106,8 +110,8 @@ QQ 那边的会话在 `<DSH_HOME>\storages\session_projcache\sessions\onebot-*.j
 
 > 脱敏规则：写 `人设\<日期>\cordis.patch.yml` 之前，`网盘密码` / `网盘令牌` / `密码` /
 > `accessToken` / `apiKey` / `token` / `secret` / `密钥` 这些键的值会替换成
-> `'***（已脱敏）'`。所以**网盘上那份不带你自己的密码**；要完整恢复请用本机备份目录那份
-> （本地也是脱敏的 —— 真要原样恢复配置，得自己另存一份 `cordis.patch.yml`）。
+> `'***（已脱敏）'`。所以**推上网盘的那份不带你自己的密码**；本机备份目录那份同样是脱敏的
+> —— 真要原样留一份配置，得自己另外存。恢复时如果某个密码位是 `***（已脱敏）`，填回原值即可。
 
 默认根目录是 **`<DSH_HOME>\backups`**（默认即 `~\.dsh\backups`，**不在任何工作区里**，清工作区不会伤到它）；`目标目录` 留空就是这个，写了就按写的来。面板「备份记录」页顶部的**备份位置**能直接改。
 
@@ -164,24 +168,23 @@ Error: desktop welcome: Web authentication failed
 能对上的两个原因，按可能性排：
 
 1. **cookie 罐里是旧的/坏的/串台的凭证**。这一项是这个请求唯一依赖的持久状态；
-   当时那个 `Network\Cookies` 后来也确实被换掉过（现在这份 20 KB，几乎是从零重建的）。
-2. **上一个实例没退干净**：4 次崩溃的时间隔得很近（01:14:44 / 01:14:54 / 01:15:02 / 01:16:42），
+   把这份 cookie 换成新的之后就好了 —— 它几乎等于全新重建的一份。
+2. **上一个实例没退干净**：几次崩溃的时间挨得很近（几秒到几十秒之内），
    像是旧进程还占着 userData 和端口，新进程认证到了别人的服务上。
 
-下次再遇到，按这个顺序试（都不需要改插件）：
+下次再遇到，按这个顺序试（**插件本身不带修复脚本，也不用装任何东西**）：
 
-1. **先双击桌面的「小清救急-修复启动」**（`scripts\repair-web-auth.ps1`）。
-   它会：读最近一次崩溃 → 结束残留进程（等够，不再半路放弃）→ 备份应用状态 →
-   把 `Network\Cookies` 改名成 `.broken-<时间戳>` → 重开 DSH → **盯着看 100 秒给你结论**。
-   每一步都写进 `scripts\logs\修复启动-<时间戳>.log`。
-2. 还不行：任务管理器里把残留的 DSH/Electron 进程全结束（不是只关窗口），再跑一次。
-3. 再不行就把 `%APPDATA%\@deepseek-ai\dsh-desktop\Network` 整个改个名（DSH 会重建），再打开。
-   认证凭证是每次启动重新发的，旧的丢了一点不影响登录。
+1. **先把残留进程结束干净**：任务管理器里结束所有 DSH / Electron 进程（不是只关窗口），等几秒。
+2. **把 cookie 罐整个换掉**：把 `%APPDATA%\@deepseek-ai\dsh-desktop\Network` 改名成
+   `Network.broken-<时间戳>`，DSH 下次启动会自己重建它。认证凭证每次启动都是新发的，旧的丢掉不影响登录。
+3. 再打开 DSH。如果这次换成了别的错（插件加载报错 / 端口被占），去看 `plugin.log` 里对应那一条。
 4. **别急着「从备份恢复 cookies」**：旧凭证对新进程本来就没用，反而更像第 1 条那种坏状态。
+
+> 面板第三个页签「离线备份」生成的是**备份**脚本（关掉 DSH 后抄 Cookies 用），不是修启动的；上面这几步都不需要它。
 
 ## 左侧栏「备份」面板（0.2.0 起）
 
-左侧栏在「插件」「自动化任务」「MCP」那一组里多一个图标，点开是主区一整页，**两个页签**：
+左侧栏在「插件」「自动化任务」「MCP」那一组里多一个图标，点开是主区一整页，**三个页签**（备份记录 / 网盘推送 / 离线备份）：
 
 **页签一 · 备份记录**（看）
 
@@ -244,7 +247,7 @@ Error: desktop welcome: Web authentication failed
 
 ## 网页接口（面板用的，也可以自己 curl）
 
-宿主半边在 `webServer` 上挂了五个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
+宿主半边在 `webServer` 上挂了十四个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
 
 | 方法 | 路径 | 干什么 |
 | --- | --- | --- |
@@ -257,6 +260,11 @@ Error: desktop welcome: Web authentication failed
 | POST | `/session-backup/netdisk-test` | 试连（只列目录，不上传）；回 `{ok,成功,话}` |
 | GET | `/session-backup/log?lines=100&which=backup` | `backup.log` 或 `plugin.log`（`which=plugin`）最后 N 行（1..500） |
 | POST | `/session-backup/log-client` | 网页半边报错专用：体 `{message, detail}` → 写进 `plugin.log` |
+| GET | `/session-backup/offline` | 离线备份脚本状态：装没装、脚本与 cmd 的路径 |
+| POST | `/session-backup/offline-install` | 把自包含的备份脚本写到 `<目标目录>\离线备份\`，回 `{ok,脚本,cmd}` |
+| POST | `/session-backup/offline-open` | 在资源管理器里打开脚本所在目录（没装则 400） |
+| GET | `/session-backup/where` | 备份位置：当前目录、默认目录、来源（默认 / 自定义）、`DSH_HOME` |
+| POST | `/session-backup/where-save` | 存备份位置，走 `configEditor`；回 `{ok,改了:[...]}` |
 
 所有 POST 会先问 `connection.requestRejection`：不是这个浏览器会话发来的就 401/403，
 所以别处（包括别的网页）不能靠它们删备份、改配置、往日志里灌字。`delete` 的日期**自己再校验一遍**
@@ -302,7 +310,6 @@ Error: desktop welcome: Web authentication failed
 | `备份应用状态` / `应用状态目录` / `应用状态项` | `true` / `''` / 见源码 | 网页端 Cookies 等 |
 | `备份人设` / `人设配置` | `true` / `''` | 空 = `<DSH_HOME>/profiles/desktop/cordis.patch.yml`（**人设卡本体属于 `dsh-soul-md`**） |
 | `备份记忆` / `记忆目录` | `true` / `[]` | 空 = `[<DSH_HOME>/soul-md/memory, <DSH_HOME>/fish-memory]`（**前者属于 `dsh-soul-md`，后者属于 `dsh-fish-memory`**；换插件/换目录时在这里指过去） |
-| ~~`归置收到的图` / `媒体目录` / `归置最小年龄分钟`~~ | — | **已搬到 `dsh-reply-jitter`**（2026-11-13） |
 | `推送网盘` | `false` | 备份成功后把当天备份推到网盘（面板「网盘推送」页签可改） |
 | `网盘协议` | `openlist` | `openlist`（本机 OpenList HTTP API）或 `webdav`（PUT/MKCOL） |
 | `网盘地址` | `http://127.0.0.1:5244` | OpenList 地址（webdav 协议时填 WebDAV 端点） |
@@ -346,15 +353,6 @@ Error: desktop welcome: Web authentication failed
 
 ⚠ **想连「关闭 DSH 后手动备份」一起推**（那是 Cookies 唯一能备全的时候）：
 把 `backup-config.json` 里也配上同样的网盘配置，再 `node backup-now.mjs`。
-
-## 归置收到的图 —— 已搬走（2026-11-13）
-
-这块功能**不再属于备份插件**，挪到 `dsh-reply-jitter` 了
-（那边的 `归置收到的图` / `媒体目录` / `归置最小年龄分钟` / `归置扫描秒`）。
-
-搬走的理由：备份插件管的是「把 DSH 的状态存下来」，
-而 QQ 收到的图片是**消息链路**上的东西，跟 reply-jitter 管的出站节奏是同一批对象。
-两处都配会打架，所以这里彻底不留配置项。
 
 ## 备份位置（1.2.0 起默认在 DSH 家里）
 
