@@ -1253,22 +1253,59 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // 推网盘：一轮要 6–8 分钟，所以**不能**用一个长请求等它 —— 浏览器会先超时断开，
+      // 报个 Failed to fetch，可后台其实推成功了（2026-11-27 就是这么误报的）。
+      // 现在：POST 只负责「开跑」立刻返回，然后每 2 秒问一次状态，跑完把结果贴出来。
       const 推网盘 = async () => {
         set忙碌('push')
         set提示(null)
         try {
-          const response = await fetch(API + '/push', {
+          const r = await fetch(API + '/push', {
             method: 'POST',
             cache: 'no-store',
             credentials: 'same-origin',
             headers: { 'content-type': 'application/json' },
             body: '{}',
           })
-          const 负载 = await response.json().catch(() => null)
-          if (!response.ok || !负载 || 负载.ok === false) {
-            throw new Error((负载 && 负载.error) || 'HTTP ' + response.status)
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+
+          // 已经在跑：直接进轮询，别报错（多半是上一次点了还没跑完）
+          if (j.已开始 === false) set提示({ kind: 'warn', text: j.话 || '已有一轮在跑，等它完成' })
+          else set提示({ kind: 'ok', text: '已开始推送，完成要几分钟，先别关面板…' })
+
+          const 开始 = Date.now()
+          const 上限 = 30 * 60 * 1000 // 半小时还没完就当它失败了，别无限转圈
+          for (;;) {
+            await new Promise((解决) => setTimeout(解决, 2000))
+            if (Date.now() - 开始 > 上限) {
+              set提示({ kind: 'bad', text: '推送超过 30 分钟还没结束，去 plugin.log 看进展' })
+              break
+            }
+            let s = null
+            try {
+              const rs = await fetch(API + '/push-status', { cache: 'no-store', credentials: 'same-origin' })
+              s = await rs.json().catch(() => null)
+            } catch {
+              continue // 单次查询失败不算完，接着问
+            }
+            if (!s || s.ok === false) continue
+            if (s.运行中) {
+              const 秒 = Math.round((Date.now() - 开始) / 1000)
+              set提示({ kind: 'ok', text: `推送中…已 ${秒} 秒（一轮通常要 6–8 分钟）` })
+              continue
+            }
+            const 结果 = s.结果
+            if (结果) {
+              set提示({
+                kind: 结果.成功 ? 'ok' : 'warn',
+                text: 结果.话 || (结果.成功 ? '推送完成' : '推送有问题'),
+              })
+            } else {
+              set提示({ kind: 'ok', text: '推送已结束' })
+            }
+            break
           }
-          set提示({ kind: 负载.成功 ? 'ok' : 'warn', text: 负载.话 || '推送完成' })
           await 读()
         } catch (失败) {
           const 话 = String((失败 && 失败.message) || 失败)
