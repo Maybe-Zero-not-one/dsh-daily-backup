@@ -17,6 +17,7 @@ dsh plugin add dsh-daily-backup
 
 | 插件 | DSH | 实测日期 |
 | --- | --- | --- |
+| 1.2.11 | 0.2.2-rc.1 | 2026-11-27（修面板「推送网盘」误报 Failed to fetch：改成后台跑 + 轮询；单文件瞬时失败重试一次） |
 | 1.2.10 | 0.2.2-rc.1 | 2026-11-26（README 版本表补全 1.2.7–1.2.9；无代码改动，纯文档对齐） |
 | 1.2.9 | 0.2.2-rc.1 | 2026-11-26（说明人设/记忆分别属于 dsh-soul-md 与 dsh-fish-memory；重发 v1.2.8 被回退的文档） |
 | 1.2.8 | 0.2.2-rc.1 | 2026-11-26（同 1.2.9 的内容，但 README 发布时被过时副本覆盖，已由 1.2.9 重发） |
@@ -251,7 +252,7 @@ Error: desktop welcome: Web authentication failed
 
 ## 网页接口（面板用的，也可以自己 curl）
 
-宿主半边在 `webServer` 上挂了十四个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
+宿主半边在 `webServer` 上挂了十五个路由（拿不到 webServer 的 profile 里自动跳过，不影响定时备份）：
 
 | 方法 | 路径 | 干什么 |
 | --- | --- | --- |
@@ -259,6 +260,7 @@ Error: desktop welcome: Web authentication failed
 | POST | `/session-backup/run` | 立刻拍一版，等跑完再回 `{ok,成功,话,文件数,总字节}` |
 | POST | `/session-backup/delete` | 体 `{日期:'YYYY-MM-DD'}`，五层一起删，回 `{ok,日期,删掉:[...]}` |
 | POST | `/session-backup/push` | 手动把当天备份推一遍网盘 |
+| GET | `/session-backup/push-status` | 推送进度：`{ok,运行中,开始于,结果,上次}`；面板每 2 秒问一次 |
 | GET | `/session-backup/netdisk` | 网盘设置（令牌/密码只回「配没配」+ 末 6 位） |
 | POST | `/session-backup/netdisk-save` | 存网盘设置，走 `configEditor`；回 `{ok,改了:[...]}` |
 | POST | `/session-backup/netdisk-test` | 试连（只列目录，不上传）；回 `{ok,成功,话}` |
@@ -350,7 +352,7 @@ Error: desktop welcome: Web authentication failed
   空文件会拖成「部分失败」，跳过才干净。
 - 推不动的文件记下来不中断（网盘是额外保险，不能反过来拖垮备份）。
 - 面板「网盘推送」页签显示上次推送结果，按钮「推送网盘」可手动补推。
-- **手动推送接口**：`POST /session-backup/push`（同样过本机会话校验）。
+- **手动推送接口**：`POST /session-backup/push`（同样过本机会话校验）。它**只负责开跑就返回**（一轮要 6–8 分钟，同步等会让浏览器超时误报失败），进度靠 `GET /session-backup/push-status` 轮询。
 
 **webdav 协议**（想连坚果云 `dav.jianguoyun.com` 这类支持 PUT/MKCOL 的）：把 `网盘协议` 改成
 `webdav`、`网盘地址` 填端点、`网盘用户名/密码` 填账号。
