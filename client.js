@@ -666,6 +666,497 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // ---------------------------------------------------------------- 数据来源
+
+    /**
+     * 「数据来源」页签。三块：
+     *
+     * ① 人设 / 记忆到底是哪个插件的（第 2 条需求）
+     *    用户在插件市场里看到一堆做人设、记忆的插件，容易以为「装了备份插件就都备了」。
+     *    这里把归属写清楚：本插件只抄一份，数据是人家产的。
+     *
+     * ② 扫描（第 3 条需求）
+     *    各家插件存放位置不一样，默认只认 soul-md / fish-memory 两家。扫一遍，
+     *    把「你这台机器上还有这些地方像人设/记忆数据、但没在备」列出来，一键加进去。
+     *
+     * ③ 自定义备份路径（第 1 条需求）
+     *    自己指定任意目录，起个名字，配排除规则和大小上限。
+     */
+    function 数据来源({ 配置 }) {
+      const [扫描中, set扫描中] = React.useState(false)
+      const [扫描结果, set扫描结果] = React.useState(null)
+      const [自定义, set自定义] = React.useState(null)
+      const [条目们, set条目们] = React.useState([])
+      const [子目录, set子目录] = React.useState('自定义')
+      const [块上限, set块上限] = React.useState(0)
+      const [单文件上限, set单文件上限] = React.useState(0)
+      const [忙, set忙] = React.useState(null)
+      const [提示, set提示] = React.useState(null)
+      const [检查中, set检查中] = React.useState(-1)
+      const [检查结果, set检查结果] = React.useState({})
+
+      // 读自定义备份配置
+      const 读自定义 = async () => {
+        try {
+          const r = await fetch(API + '/custom', { cache: 'no-store', credentials: 'same-origin' })
+          const j = await r.json().catch(() => null)
+          if (r.ok && j && j.ok !== false) {
+            set自定义(j)
+            set条目们(Array.isArray(j.条目) ? j.条目 : [])
+            set子目录(j.子目录 || '自定义')
+            set块上限(Number(j.块上限MB) || 0)
+            set单文件上限(Number(j.单文件上限MB) || 0)
+          }
+        } catch {
+          // 读不到就保持原样
+        }
+      }
+
+      React.useEffect(() => {
+        void 读自定义()
+      }, [])
+
+      const 扫描 = async () => {
+        set扫描中(true)
+        set提示(null)
+        try {
+          const r = await fetch(API + '/scan', { cache: 'no-store', credentials: 'same-origin' })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          set扫描结果(j)
+        } catch (失败) {
+          const 话 = String((失败 && 失败.message) || 失败)
+          set提示({ kind: 'bad', text: '扫描失败：' + 话 })
+          报告给宿主('扫描数据来源失败：' + 话)
+        } finally {
+          set扫描中(false)
+        }
+      }
+
+      // 把扫描到的某一条加成「自定义备份」
+      const 加进来 = (项) => {
+        const 已有 = 条目们.some((x) => x.路径 === 项.路径)
+        if (已有) {
+          set提示({ kind: 'warn', text: '这条已经在列表里了' })
+          return
+        }
+        set条目们([...条目们, { 路径: 项.路径, 名称: 项.名称, 启用: true, 排除: [], 块上限MB: 0, 最大单文件MB: 0 }])
+        set提示({ kind: 'ok', text: '已加入列表，记得点下面的「保存」' })
+      }
+
+      const 检查一条 = async (序) => {
+        set检查中(序)
+        try {
+          const 条 = 条目们[序]
+          const r = await fetch(API + '/custom-check', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              路径: 条.路径,
+              块上限MB: 条.块上限MB || 块上限,
+              最大单文件MB: 条.最大单文件MB || 单文件上限,
+            }),
+          })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          set检查结果({ ...检查结果, [序]: j })
+        } catch (失败) {
+          set检查结果({ ...检查结果, [序]: { 可用: false, 原因: String((失败 && 失败.message) || 失败) } })
+        } finally {
+          set检查中(-1)
+        }
+      }
+
+      const 存 = async () => {
+        set忙('save')
+        set提示(null)
+        try {
+          const r = await fetch(API + '/custom-save', {
+            method: 'POST',
+            cache: 'no-store',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              自定义备份: 条目们.map((x) => ({
+                路径: x.路径,
+                名称: x.名称,
+                启用: x.启用 !== false,
+                排除: x.排除 || [],
+                块上限MB: Number(x.块上限MB) || 0,
+                最大单文件MB: Number(x.最大单文件MB) || 0,
+              })),
+              自定义子目录: 子目录,
+              自定义块上限MB: 块上限,
+              自定义单文件上限MB: 单文件上限,
+            }),
+          })
+          const j = await r.json().catch(() => null)
+          if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || 'HTTP ' + r.status)
+          set提示({ kind: 'ok', text: `已保存（${j.条目数 || 0} 条），下次备份生效` })
+          await 读自定义()
+        } catch (失败) {
+          const 话 = String((失败 && 失败.message) || 失败)
+          set提示({ kind: 'bad', text: '保存失败：' + 话 })
+          报告给宿主('保存自定义备份失败：' + 话)
+        } finally {
+          set忙(null)
+        }
+      }
+
+      const 改条 = (序, 键, 值) => {
+        const 新 = 条目们.slice()
+        新[序] = { ...新[序], [键]: 值 }
+        set条目们(新)
+      }
+
+      return h(
+        'div',
+        null,
+        // ── ① 归属说明 ──────────────────────────────────────────────
+        h(
+          'div',
+          { className: 'sb-form', style: { marginBottom: '14px' } },
+          h(
+            'div',
+            { className: 'sb-form-head' },
+            h('div', { className: 'sb-form-title' }, '人设和记忆是谁的数据'),
+            h(
+              'div',
+              { className: 'sb-form-sub' },
+              '本插件不生产人设和记忆，只负责「抄一份」。数据是下面这些插件写的 —— 它们没装、或者换了存放位置，备份里就没有那部分内容。',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-body' },
+            h(
+              'table',
+              { className: 'sb-table', style: { width: '100%', fontSize: '12.5px' } },
+              h(
+                'thead',
+                null,
+                h(
+                  'tr',
+                  null,
+                  h('th', { style: { textAlign: 'left', padding: '4px 8px' } }, '数据'),
+                  h('th', { style: { textAlign: 'left', padding: '4px 8px' } }, '属于哪个插件'),
+                  h('th', { style: { textAlign: 'left', padding: '4px 8px' } }, '它写在哪'),
+                ),
+              ),
+              h(
+                'tbody',
+                null,
+                h(
+                  'tr',
+                  null,
+                  h('td', { style: { padding: '4px 8px' } }, h('b', null, '人设卡')),
+                  h('td', { style: { padding: '4px 8px' } }, h('code', null, 'dsh-soul-md')),
+                  h('td', { style: { padding: '4px 8px' } }, 'profile 的 ', h('code', null, 'cordis.patch.yml'), ' 里 ', h('code', null, '- id: soul-md'), ' 的 ', h('code', null, 'config.cards')),
+                ),
+                h(
+                  'tr',
+                  null,
+                  h('td', { style: { padding: '4px 8px' } }, h('b', null, '记忆 · 按卡')),
+                  h('td', { style: { padding: '4px 8px' } }, h('code', null, 'dsh-soul-md')),
+                  h('td', { style: { padding: '4px 8px' } }, h('code', null, '<DSH_HOME>\\soul-md\\memory\\<卡名>.md')),
+                ),
+                h(
+                  'tr',
+                  null,
+                  h('td', { style: { padding: '4px 8px' } }, h('b', null, '记忆 · 按会话')),
+                  h('td', { style: { padding: '4px 8px' } }, h('code', null, 'dsh-fish-memory')),
+                  h('td', { style: { padding: '4px 8px' } }, h('code', null, '<DSH_HOME>\\fish-memory\\*.json')),
+                ),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'sb-form-hint', style: { marginTop: '8px' } },
+              '本插件认的是**目录名**不是包名：换用别的记忆插件、或把目录配到别处，要在下面的扫描结果里加进来，否则那一路会静默跳过。',
+            ),
+          ),
+        ),
+
+        // ── ② 扫描 ──────────────────────────────────────────────────
+        h(
+          'div',
+          { className: 'sb-form', style: { marginBottom: '14px' } },
+          h(
+            'div',
+            { className: 'sb-form-head' },
+            h('div', { className: 'sb-form-title' }, '扫描：还有哪些数据没在备'),
+            h(
+              'div',
+              { className: 'sb-form-sub' },
+              '插件市场里做人设、记忆的插件不止一家，存放位置各不相同。扫一遍本机，把「像人设/记忆数据、但不在这份备份里」的目录找出来。只读扫描，不改任何文件。',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-foot' },
+            h(
+              'button',
+              { type: 'button', className: 'sb-btn sb-btn-primary', disabled: 扫描中, onClick: 扫描 },
+              扫描中 ? '扫描中…' : '扫描本机',
+            ),
+            h('span', { className: 'sb-form-hint' }, '看 DSH 家目录、AppData、文档这几处，最多往下三层（junction 也会跟进去）'),
+          ),
+          // 扫描结果
+          扫描结果
+            ? h(
+                'div',
+                { className: 'sb-form-body' },
+                扫描结果.发现 && 扫描结果.发现.length > 0
+                  ? h(
+                      'div',
+                      null,
+                      h('div', { className: 'sb-form-hint', style: { marginBottom: '6px' } }, `发现 ${扫描结果.发现.length} 处没在备的：`),
+                      扫描结果.发现.map((项, i) =>
+                        h(
+                          'div',
+                          {
+                            key: 'scan-' + i,
+                            style: {
+                              border: '1px solid rgba(127,127,127,.22)',
+                              borderRadius: '6px',
+                              padding: '8px 10px',
+                              marginBottom: '8px',
+                            },
+                          },
+                          h(
+                            'div',
+                            { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
+                            h('b', null, 项.名称),
+                            h('span', { className: 'sb-chip' }, 项.大小),
+                            h('span', { className: 'sb-chip' }, 项.文件数 + ' 个文件'),
+                            项.类型 ? h('span', { className: 'sb-chip' }, 项.类型) : null,
+                          ),
+                          h('code', { style: { fontSize: '11px', wordBreak: 'break-all', display: 'block', margin: '4px 0' } }, 项.路径),
+                          h('div', { className: 'sb-form-hint' }, 项.理由),
+                          h(
+                            'div',
+                            { style: { marginTop: '6px' } },
+                            h(
+                              'button',
+                              { type: 'button', className: 'sb-btn', onClick: () => 加进来(项) },
+                              '加入自定义备份',
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  : h('div', { className: 'sb-form-hint' }, '没发现别处的数据 ✓ 现有的都在备了。'),
+                扫描结果.已在备 && 扫描结果.已在备.length > 0
+                  ? h(
+                      'div',
+                      { style: { marginTop: '10px' } },
+                      h('div', { className: 'sb-form-hint' }, '已经在备的：'),
+                      扫描结果.已在备.map((x, i) =>
+                        h('div', { key: 'ok-' + i, style: { fontSize: '12px' } }, '· ' + x.名称 + '  ', h('code', { style: { fontSize: '11px' } }, x.路径)),
+                      ),
+                    )
+                  : null,
+              )
+            : null,
+        ),
+
+        // ── ③ 自定义备份路径 ────────────────────────────────────────
+        h(
+          'div',
+          { className: 'sb-form' },
+          h(
+            'div',
+            { className: 'sb-form-head' },
+            h('div', { className: 'sb-form-title' }, '自定义备份路径'),
+            h(
+              'div',
+              { className: 'sb-form-sub' },
+              '除了上面那些固定层，还可以让你自己指定的目录跟着一起备。每块都能单独起名、配排除规则、限大小。',
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-body' },
+            条目们.length === 0
+              ? h('div', { className: 'sb-form-hint' }, '还没加。可以从上面的扫描结果一键加，也可以自己填一个路径。')
+              : 条目们.map((条, 序) => {
+                  const 检 = 检查结果[序]
+                  return h(
+                    'div',
+                    {
+                      key: 'c-' + 序,
+                      style: {
+                        border: '1px solid rgba(127,127,127,.22)',
+                        borderRadius: '6px',
+                        padding: '8px 10px',
+                        marginBottom: '8px',
+                      },
+                    },
+                    h(
+                      'div',
+                      { className: 'sb-row' },
+                      h('label', { className: 'sb-row-label' }, '路径'),
+                      h(
+                        'div',
+                        { className: 'sb-row-ctl', style: { flexDirection: 'column', alignItems: 'stretch', gap: '4px' } },
+                        h('input', {
+                          className: 'sb-input',
+                          type: 'text',
+                          value: 条.路径 || '',
+                          placeholder: 'D:\\我的笔记（要绝对路径）',
+                          onChange: (e) => 改条(序, '路径', e.target.value),
+                        }),
+                        检
+                          ? h(
+                              'span',
+                              {
+                                className: 'sb-chip',
+                                'data-ok': 检.可用 ? '1' : '0',
+                                style: { alignSelf: 'flex-start' },
+                              },
+                              检.可用 ? `可访问 · ${检.大小 || ''}${检.文件数 ? ' · ' + 检.文件数 + ' 个文件' : ''}` : '不可用：' + 检.原因,
+                            )
+                          : null,
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { className: 'sb-row' },
+                      h('label', { className: 'sb-row-label' }, '备份文件夹名'),
+                      h(
+                        'div',
+                        { className: 'sb-row-ctl' },
+                        h('input', {
+                          className: 'sb-input',
+                          type: 'text',
+                          value: 条.名称 || '',
+                          placeholder: '留空 = 用路径最后一段',
+                          onChange: (e) => 改条(序, '名称', e.target.value),
+                        }),
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { className: 'sb-row' },
+                      h('label', { className: 'sb-row-label' }, '排除'),
+                      h(
+                        'div',
+                        { className: 'sb-row-ctl' },
+                        h('input', {
+                          className: 'sb-input',
+                          type: 'text',
+                          value: (条.排除 || []).join(' '),
+                          placeholder: '*.tmp *.log node_modules（空格隔开）',
+                          onChange: (e) => 改条(序, '排除', e.target.value.split(/\s+/).filter(Boolean)),
+                        }),
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { className: 'sb-row' },
+                      h('label', { className: 'sb-row-label' }, '单文件上限'),
+                      h(
+                        'div',
+                        { className: 'sb-row-ctl' },
+                        h('input', {
+                          className: 'sb-input sb-input-narrow',
+                          type: 'number',
+                          min: 0,
+                          value: 条.最大单文件MB || 0,
+                          onChange: (e) => 改条(序, '最大单文件MB', Number(e.target.value) || 0),
+                        }),
+                        h('span', { className: 'sb-form-hint' }, 'MB，0 = 不限。超过的单个文件跳过并记进清单'),
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { className: 'sb-form-foot' },
+                      h(
+                        'button',
+                        { type: 'button', className: 'sb-btn', disabled: 检查中 === 序, onClick: () => 检查一条(序) },
+                        检查中 === 序 ? '检查中…' : '检查这条',
+                      ),
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          className: 'sb-btn',
+                          onClick: () => set条目们(条目们.filter((_, i) => i !== 序)),
+                        },
+                        '删掉',
+                      ),
+                    ),
+                  )
+                }),
+            h(
+              'div',
+              { className: 'sb-form-foot' },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'sb-btn',
+                  onClick: () => set条目们([...条目们, { 路径: '', 名称: '', 启用: true, 排除: [], 块上限MB: 0, 最大单文件MB: 0 }]),
+                },
+                '＋ 加一条',
+              ),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-body' },
+            h(
+              'div',
+              { className: 'sb-row' },
+              h('label', { className: 'sb-row-label' }, '存放子目录'),
+              h(
+                'div',
+                { className: 'sb-row-ctl' },
+                h('input', {
+                  className: 'sb-input',
+                  type: 'text',
+                  value: 子目录,
+                  onChange: (e) => set子目录(e.target.value),
+                }),
+                h('span', { className: 'sb-form-hint' }, '落点：' + ((自定义 && 自定义.落点) || '') + '\\<名字>\\<日期>\\'),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'sb-row' },
+              h('label', { className: 'sb-row-label' }, '整块上限'),
+              h(
+                'div',
+                { className: 'sb-row-ctl' },
+                h('input', {
+                  className: 'sb-input sb-input-narrow',
+                  type: 'number',
+                  min: 0,
+                  value: 块上限,
+                  onChange: (e) => set块上限(Number(e.target.value) || 0),
+                }),
+                h('span', { className: 'sb-form-hint' }, 'MB，0 = 不限。超过就整块跳过，免得一个误配把盘塞满'),
+              ),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'sb-form-foot' },
+            h(
+              'button',
+              { type: 'button', className: 'sb-btn sb-btn-primary', disabled: 忙 !== null, onClick: 存 },
+              忙 === 'save' ? '保存中…' : '保存',
+            ),
+            h('span', { className: 'sb-form-hint' }, '保存时每条都会先体检：路径不可访问的当场报错，不会写进配置'),
+          ),
+        ),
+
+        提示 ? h('div', { className: 'sb-notice', 'data-kind': 提示.kind, style: { whiteSpace: 'pre-wrap' } }, 提示.text) : null,
+      )
+    }
+
     // ---------------------------------------------------------------- 网盘设置
 
     // 表单的初始值：从宿主给的「脱敏视图」来。令牌/密码永远是空输入框 ——
@@ -1700,11 +2191,26 @@ window.__ModuleLoader__.load({
             ? h('span', { className: 'sb-tab-num', title: '还没装离线脚本（cookie 备不全）' }, '!')
             : null,
         ),
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': 页签 === '来源',
+            'data-on': 页签 === '来源' ? '1' : '0',
+            className: 'sb-tab',
+            onClick: () => set页签('来源'),
+          },
+          '数据来源',
+        ),
       )
 
       // 「离线」页签：装本地脚本，双击就能拿到完整 cookie
       const 离线页 =
         页签 === '离线' ? h(离线备份, { 状态: data && data.离线脚本 }) : null
+
+      // 「来源」页签：人设/记忆是哪来的 + 扫描别处的数据 + 自定义备份路径
+      const 来源页 = 页签 === '来源' ? h(数据来源, { 配置: data && data.配置 }) : null
 
       // 「网盘」页签的内容：表单 + 上一次推送的结果
       const 网盘页 =
@@ -1898,6 +2404,7 @@ window.__ModuleLoader__.load({
           页签栏,
           网盘页,
           离线页,
+          来源页,
           记录页,
         ),
       )
